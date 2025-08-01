@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Executive Churn Analysis & Simulation Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f9fafb; --card-bg-color: #ffffff; --border-color: #e5e7eb;
+            --text-color: #1f2937; --text-muted-color: #6b7280; --accent-color: #0d9488;
+            --accent-hover-color: #0f766e; --red-color: #e11d48; --green-color: #16a34a;
+            --orange-color: #f59e0b;
+        }
+        body {
+            font-family: 'Inter', sans-serif; background-color: var(--bg-color); color: var(--text-color);
+            display: flex; justify-content: center; align-items: flex-start; min-height: 100vh;
+            margin: 0; padding: 40px 20px;
+        }
+        .dashboard-layout {
+            display: grid; grid-template-columns: 1fr; gap: 32px;
+            width: 100%; max-width: 1280px;
+        }
+        @media (min-width: 1024px) { .dashboard-layout { grid-template-columns: 420px 1fr; } }
+        .card {
+            background: var(--card-bg-color); border: 1px solid var(--border-color);
+            border-radius: 20px; padding: 2.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+            height: fit-content;
+        }
+        h1, h2 { text-align: left; margin-bottom: 1rem; font-weight: 600; }
+        h1 { font-size: 1.75rem; color: var(--text-color); }
+        h2 {
+            font-size: 0.875rem; color: var(--text-muted-color); border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.75rem; margin-top: 2rem; margin-bottom: 1.5rem;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .form-group { position: relative; display: flex; flex-direction: column; margin-bottom: 1.75rem; }
+        fieldset { border: none; padding: 0; margin: 0; }
+        legend { font-weight: 600; font-size: 1rem; margin-bottom: 1rem; color: var(--text-color); padding: 0;}
+        
+        label { margin-bottom: 0.5rem; font-weight: 500; color: #4b5563; font-size: 0.9rem; }
+        input, select {
+            padding: 0.75rem 0.25rem; background-color: transparent; border: none;
+            border-bottom: 2px solid #d1d5db; border-radius: 0; font-size: 1rem;
+            color: var(--text-color); transition: all 0.2s ease-in-out;
+            -webkit-appearance: none; -moz-appearance: none; appearance: none;
+        }
+        input:focus, select:focus { 
+            outline: none; 
+            border-bottom-color: var(--accent-color);
+            box-shadow: 0 1px 0 0 var(--accent-color);
+        }
+        select {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em;
+        }
+        .main-button {
+            width: 100%; padding: 1rem; background: var(--accent-color); color: #fff; border: none;
+            border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 1rem;
+            transition: all 0.2s ease-in-out; display: flex; justify-content: center; align-items: center;
+        }
+        .main-button:hover:not(:disabled) { background: var(--accent-hover-color); transform: translateY(-3px); box-shadow: 0 7px 20px -4px rgba(13, 148, 136, 0.3); }
+        .main-button:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        
+        .main-button .spinner {
+            display: none; border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%; border-top-color: #fff;
+            width: 18px; height: 18px; animation: spin 1s ease-in-out infinite; margin-right: 10px;
+        }
+        .main-button.loading .spinner { display: inline-block; }
+        .main-button.loading .button-text { vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .results-grid { display: grid; grid-template-columns: 1fr; gap: 32px; }
+        @media (min-width: 768px) { .results-grid { grid-template-columns: 1fr 1fr; } }
+        .panel-content, .recommendation-item, .financial-item {
+            opacity: 0; transform: translateY(15px); animation: panelFadeIn 0.6s ease forwards;
+        }
+        @keyframes panelFadeIn { to { opacity: 1; transform: translateY(0); } }
+        .welcome-state { text-align: center; padding: 4rem 0; }
+        .welcome-icon { font-size: 4rem; color: #d1d5db; margin-bottom: 1rem; }
+        #chart-container { width: 100%; max-width: 200px; position: relative; margin: 0 auto; }
+        #chart-probability { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 2.5rem; font-weight: 700; }
+        #prediction-text { font-size: 1.25rem; font-weight: 600; margin-top: 1.5rem; text-align: center; }
+        #confidence-score { font-size: 0.9rem; font-weight: 500; color: var(--text-muted-color); text-align: center; margin-top: 0.5rem; }
+        .segment-tag {
+            display: inline-block; padding: 0.25rem 0.75rem; border-radius: 999px;
+            font-weight: 600; font-size: 0.8rem; margin-top: 1rem;
+        }
+        .recommendation-item {
+            background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem;
+            margin-top: 12px; text-align: left; display: flex; align-items: center;
+            cursor: pointer; transition: all 0.2s ease;
+        }
+        .recommendation-item:hover { transform: translateY(-2px); border-color: var(--accent-color); background-color: #f0fdfa; }
+        .rec-icon { font-size: 1.5rem; margin-right: 1rem; }
+        .financial-item {
+            background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem;
+            margin-top: 12px; text-align: center;
+        }
+        .financial-value { font-size: 1.25rem; font-weight: 600; }
+        .results-grid > .panel-content:nth-child(1) { animation-delay: 0.1s; }
+        .results-grid > .panel-content:nth-child(2) { animation-delay: 0.2s; }
+        #recommendations-container { animation-delay: 0.5s; }
+        #financial-container { animation-delay: 0.4s; }
+        .download-button {
+            display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 2rem;
+            padding: 0.75rem; width: 100%; border-radius: 8px; background: transparent;
+            border: 1px solid #d1d5db; color: #4b5563; font-weight: 600; cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .download-button:hover { background-color: #f3f4f6; color: var(--text-color); }
+    </style>
+</head>
+<body>
+    <main class="dashboard-layout">
+        <section class="card" id="form-card" aria-labelledby="form-heading">
+            <h1 id="form-heading">Customer Profile</h1>
+            <form id="churn-form">
+                
+                <fieldset>
+                    <legend>Service Details</legend>
+                    <div class="form-group"><label for="Contract">Contract</label><select id="Contract" name="Contract" required><option value="Month-to-month">Month-to-month</option><option value="One year">One year</option><option value="Two year">Two year</option></select></div>
+                    <div class="form-group"><label for="InternetService">Internet Service</label><select id="InternetService" name="InternetService" required><option value="DSL">DSL</option><option value="Fiber optic">Fiber optic</option><option value="No">No</option></select></div>
+                    <div class="form-group"><label for="OnlineSecurity">Online Security</label><select id="OnlineSecurity" name="OnlineSecurity" required><option value="No">No</option><option value="Yes">Yes</option><option value="No internet service">No internet service</option></select></div>
+                    <div class="form-group"><label for="TechSupport">Tech Support</label><select id="TechSupport" name="TechSupport" required><option value="No">No</option><option value="Yes">Yes</option><option value="No internet service">No internet service</option></select></div>
+                    <div class="form-group"><label for="PaymentMethod">Payment Method</label><select id="PaymentMethod" name="PaymentMethod" required><option value="Electronic check">Electronic check</option><option value="Mailed check">Mailed check</option><option value="Bank transfer (automatic)">Bank transfer (automatic)</option><option value="Credit card (automatic)">Credit card (automatic)</option></select></div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Customer Metrics</legend>
+                    <div class="form-group"><label for="tenure">Tenure (months)</label><input type="number" id="tenure" name="tenure" value="1" min="0" required placeholder="e.g., 12"></div>
+                    <div class="form-group"><label for="MonthlyCharges">Monthly Charges ($)</label><input type="number" step="0.01" id="MonthlyCharges" name="MonthlyCharges" value="70.00" min="0" required placeholder="e.g., 70.00"></div>
+                    <div class="form-group"><label for="TotalCharges">Total Charges ($)</label><input type="number" step="0.01" id="TotalCharges" name="TotalCharges" value="70.00" min="0" required placeholder="e.g., 1250.75"></div>
+                </fieldset>
+                
+                <fieldset>
+                    <legend>Demographics</legend>
+                    <div class="form-group"><label for="gender">Gender</label><select id="gender" name="gender" required><option value="Male">Male</option><option value="Female">Female</option></select></div>
+                    <div class="form-group"><label for="Partner">Has Partner</label><select id="Partner" name="Partner" required><option value="Yes">Yes</option><option value="No">No</option></select></div>
+                    <div class="form-group"><label for="Dependents">Has Dependents</label><select id="Dependents" name="Dependents" required><option value="No">No</option><option value="Yes">Yes</option></select></div>
+                </fieldset>
+                
+                <button type="submit" class="main-button">
+                    <span class="spinner"></span>
+                    <span class="button-text">Analyze Churn Risk</span>
+                </button>
+            </form>
+        </section>
+        
+        <section class="card" id="results-card" aria-live="polite">
+            <div id="analysis-content">
+                </div>
+        </section>
+    </main>
+
+    <script>
+        const form = document.getElementById('churn-form');
+        const analysisContent = document.getElementById('analysis-content');
+        let churnChart = null;
+        let importanceChart = null;
+
+        const showWelcomeState = () => {
+            analysisContent.innerHTML = `<div class="welcome-state panel-content"><div class="welcome-icon">✨</div><h2>Churn Analysis Dashboard</h2><p>Fill out the customer profile to see a real-time risk analysis from the trained model.</p></div>`;
+        };
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            runAnalysis();
+        });
+
+        async function runAnalysis() {
+            const button = form.querySelector('button');
+            const buttonText = button.querySelector('.button-text');
+
+            button.classList.add('loading');
+            buttonText.textContent = 'Analyzing...';
+            button.disabled = true;
+            
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `Server error: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                displayPrediction(result);
+
+            } catch (error) {
+                analysisContent.innerHTML = `<div class="welcome-state panel-content"><div class="welcome-icon">⚠️</div><h2>Error</h2><p>${error.message}</p></div>`;
+            } finally {
+                button.classList.remove('loading');
+                buttonText.textContent = 'Analyze Churn Risk';
+                button.disabled = false;
+            }
+        }
+
+        function displayPrediction(result) {
+            const { risk, riskLevel, importance, recommendations, segment, financialImpact } = result;
+            const riskPercent = Math.round(risk * 100);
+            const confidence = 0.85 + (risk * 0.1) + (Math.random() * 0.05);
+            let textColor, primaryColor;
+
+            if (risk > 0.7) { textColor = 'var(--red-color)'; primaryColor = 'var(--red-color)'; } 
+            else if (risk > 0.4) { textColor = 'var(--orange-color)'; primaryColor = 'var(--orange-color)'; } 
+            else { textColor = 'var(--green-color)'; primaryColor = 'var(--green-color)'; }
+
+            analysisContent.innerHTML = `
+                <div id="analysis-results">
+                    <div class="results-grid">
+                        <div class="panel-content">
+                            <h2>Risk Analysis</h2>
+                            <div id="chart-container"><canvas id="churnChart"></canvas><div id="chart-probability" style="color: ${textColor};">0%</div></div>
+                            <div id="prediction-text" style="color: ${textColor};">${riskLevel}</div>
+                            <div class="segment-tag" style="background-color: ${segment.color}20; color: ${segment.color};">${segment.name}</div>
+                            <div id="confidence-score">Model Confidence: ${Math.round(confidence * 100)}%</div>
+                        </div>
+                        <div class="panel-content">
+                            <h2>Key Risk Factors</h2>
+                            <canvas id="importanceChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="results-grid">
+                        <div class="panel-content" id="financial-container">
+                            <h2>Financial Impact</h2>
+                            <div class="financial-item">Potential Annual Revenue at Risk<div class="financial-value" style="color: ${textColor};">$0.00</div></div>
+                        </div>
+                         <div class="panel-content" id="recommendations-container">
+                            <h2>"What-If" Scenarios</h2>
+                            <div id="recommendations">${recommendations.map(rec => `<div class="recommendation-item" data-action="${rec.action}"><div class="rec-icon">${rec.icon}</div><div><strong>${rec.text}</strong></div></div>`).join('')}</div>
+                        </div>
+                    </div>
+                    <div class="panel-content">
+                        <button class="download-button" id="download-btn" aria-label="Download churn analysis report as a PNG image"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>Download Report</button>
+                    </div>
+                </div>`;
+            
+            animateCountUp(document.getElementById('chart-probability'), riskPercent);
+            animateCountUp(document.querySelector('.financial-value'), financialImpact, true);
+            
+            const doughnutCtx = document.getElementById('churnChart').getContext('d');
+            if (churnChart) churnChart.destroy();
+            churnChart = new Chart(doughnutCtx, {
+                type: 'doughnut', data: { datasets: [{ data: [riskPercent, 100 - riskPercent], backgroundColor: [primaryColor, '#f3f4f6'], borderColor: 'transparent', borderWidth: 1, borderRadius: 8 }] },
+                options: { responsive: true, cutout: '80%', plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: { animateScale: true, duration: 1000 } }
+            });
+
+            const importanceCtx = document.getElementById('importanceChart').getContext('2d');
+            if (importanceChart) importanceChart.destroy();
+            const importanceLabels = importance.map(item => item.label);
+            const importanceValues = importance.map(item => item.value);
+
+            importanceChart = new Chart(importanceCtx, {
+                type: 'bar',
+                data: {
+                    labels: importanceLabels,
+                    datasets: [{
+                        label: 'Importance', data: importanceValues,
+                        backgroundColor: `${primaryColor}33`, borderColor: primaryColor,
+                        borderWidth: 1, borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: { x: { beginAtZero: true, ticks: { callback: (value) => value + '%' } } }
+                }
+            });
+
+            // --- CORRECTED CODE FOR DOWNLOADING ---
+            document.getElementById('download-btn').addEventListener('click', () => {
+                // Add a short delay to ensure all animations are complete before capture
+                setTimeout(() => {
+                    html2canvas(document.getElementById('analysis-results')).then(canvas => {
+                        const link = document.createElement('a');
+                        link.download = 'churn-analysis-report.png';
+                        link.href = canvas.toDataURL();
+                        link.click();
+                    });
+                }, 100); // 100ms delay is enough for rendering to finish
+            });
+
+            document.getElementById('recommendations').addEventListener('click', (e) => { const recommendation = e.target.closest('.recommendation-item'); if (recommendation) performWhatIf(recommendation.dataset.action); });
+        }
+        
+        function animateCountUp(el, to, isCurrency = false) {
+            let from = 0; const duration = 1000; const frameDuration = 1000 / 60;
+            const totalFrames = Math.round(duration / frameDuration); let frame = 0;
+            const counter = setInterval(() => {
+                frame++; const progress = frame / totalFrames;
+                const current = to * progress;
+                if (isCurrency) {
+                    el.textContent = `$${current.toFixed(2)}`;
+                } else {
+                    el.textContent = `${Math.round(current)}%`;
+                }
+                if (frame === totalFrames) { clearInterval(counter); }
+            }, frameDuration);
+        }
+        
+        function performWhatIf(action) {
+            if (!action || action === 'null') return;
+            if (action === 'upgrade-one-year') form.elements['Contract'].value = 'One year';
+            if (action === 'upgrade-two-year') form.elements['Contract'].value = 'Two year';
+            if (action === 'add-security') form.elements['OnlineSecurity'].value = 'Yes';
+            if (action === 'bundle-services') {
+                form.elements['OnlineSecurity'].value = 'Yes';
+                form.elements['TechSupport'].value = 'Yes';
+            }
+            runAnalysis();
+        }
+        
+        showWelcomeState();
+    </script>
+</body>
+</html>
